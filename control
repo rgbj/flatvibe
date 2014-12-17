@@ -1,0 +1,9 @@
+Package: com.lazypulse.flatvibe
+Name: Flat Vibe
+Depends: mobilesubstrate
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Turn off vibration when the device lays flat
+Maintainer: Raphaël Berbain
+Author: Raphaël Berbain
+Section: Tweaks
