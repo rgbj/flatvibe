@@ -6,40 +6,37 @@
 @interface FlatVibe: NSObject
 
 @property (retain) CMMotionManager *mm;
-@property BOOL flat;
+@property (retain) FSSwitchPanel *fsp;
+@property (retain) NSTimer *timer;
+
+@property FSSwitchState vibrate;
 
 @end
 
 @implementation FlatVibe
 
 - (id) init {
-    // TODO: check language idiom about ctor & memory mgmt
+    // TODO: check language idiom about alloc/init & errs
     if (self = [super init]) {
-        self.flat = false;
+
+        self.vibrate = FSSwitchStateIndeterminate;
+        self.fsp = [FSSwitchPanel sharedPanel];
         self.mm = [[[CMMotionManager alloc] init] autorelease];
 
-    }
-    return self;
-}
-
-- (void) run {
-
-    NSLog(@"FlatVibe: accelerometer available: %d active: %d",
-          self.mm.accelerometerAvailable, self.mm.accelerometerActive);
-
-    if(self.mm.accelerometerAvailable) {
-        if (!self.mm.accelerometerActive) {
-            [self.mm startAccelerometerUpdates];
+        if(self.mm.accelerometerAvailable) {
+            if (!self.mm.accelerometerActive) {
+                [self.mm startAccelerometerUpdates];
+            }
+            else {
+                NSLog(@"FlatVibe: accelerometer was active already..");
+            }
+            self.timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
         }
         else {
-            NSLog(@"FlatVibe: accelerometer was active already..");
+            NSLog(@"FlatVibe: no accelerometer available -- doing.. nothing");
         }
-        [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     }
-    else {
-        NSLog(@"FlatVibe: no accelerometer available -- doing.. nothing");
-        // TODO: cleanup
-    }
+    return self;
 }
 
 - (void) tick:(NSTimer *)timer {
@@ -54,35 +51,29 @@
     }
 
     CMAcceleration a = self.mm.accelerometerData.acceleration;
-    //NSLog(@"FlatVibe: acceleration: %f %f %f", a.x, a.y, a.z);
     float epsilon = 0.1;
-    BOOL flat = fabs(a.x) < epsilon && fabs(a.y) < epsilon && fabs(a.z) - 1 < epsilon;
 
-    if (flat && !self.flat) {
-        NSLog(@"FlatVibe: self.flat = NO  -> YES");
-        self.flat = YES;
-        [self setVibration];
-    }
-    else if (!flat && self.flat) {
-        NSLog(@"FlatVibe: self.flat = YES -> NO");
-        self.flat = NO;
+    FSSwitchState vibrate =
+        fabs(a.x) < epsilon && fabs(a.y) < epsilon && fabs(a.z) - 1 < epsilon?
+        FSSwitchStateOff:
+        FSSwitchStateOn;
+
+    if (self.vibrate != vibrate) {
+        NSLog(@"FlatVibe: vibrate: %d -> %d", self.vibrate, vibrate);
+        self.vibrate = vibrate;
         [self setVibration];
     }
 }
 
-- (void) setVibration {
+static NSString *switchIdentifier = @"com.a3tweaks.switch.vibration";
 
-    NSString *switchIdentifier = @"com.a3tweaks.switch.vibration";
-    FSSwitchPanel *fsp = [FSSwitchPanel sharedPanel];
-    [fsp setState:(self.flat? FSSwitchStateOff: FSSwitchStateOn) forSwitchIdentifier:switchIdentifier];
-    [fsp applyActionForSwitchIdentifier:switchIdentifier];
+- (void) setVibration {
+    [self.fsp setState:self.vibrate forSwitchIdentifier:switchIdentifier];
+    [self.fsp applyActionForSwitchIdentifier:switchIdentifier];
 }
 
 @end
 
-static FlatVibe *flatvibe;
-
 %ctor {
-    flatvibe = [[[FlatVibe alloc] init] autorelease];
-    [flatvibe run];
+    [[[FlatVibe alloc] init] autorelease];
 }
