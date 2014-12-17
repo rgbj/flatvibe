@@ -1,34 +1,88 @@
-/* How to Hook with Logos
-Hooks are written with syntax similar to that of an Objective-C @implementation.
-You don't need to #include <substrate.h>, it will be done automatically, as will
-the generation of a class list and an automatic constructor.
+#import <Foundation/Foundation.h>
+#import <CoreMotion/CoreMotion.h>
 
-%hook ClassName
+#import <FlipSwitch/FlipSwitch.h>
 
-// Hooking a class method
-+ (id)sharedInstance {
-	return %orig;
+@interface FlatVibe: NSObject
+
+@property (retain) CMMotionManager *mm;
+@property BOOL flat;
+
+@end
+
+@implementation FlatVibe
+
+- (id) init {
+    // TODO: check language idiom about ctor & memory mgmt
+    if (self = [super init]) {
+        self.flat = false;
+        self.mm = [[[CMMotionManager alloc] init] autorelease];
+
+    }
+    return self;
 }
 
-// Hooking an instance method with an argument.
-- (void)messageName:(int)argument {
-	%log; // Write a message about this call, including its class, name and arguments, to the system log.
+- (void) run {
 
-	%orig; // Call through to the original function with its original arguments.
-	%orig(nil); // Call through to the original function with a custom argument.
+    NSLog(@"FlatVibe: accelerometer available: %d active: %d",
+          self.mm.accelerometerAvailable, self.mm.accelerometerActive);
 
-	// If you use %orig(), you MUST supply all arguments (except for self and _cmd, the automatically generated ones.)
+    if(self.mm.accelerometerAvailable) {
+        if (!self.mm.accelerometerActive) {
+            [self.mm startAccelerometerUpdates];
+        }
+        else {
+            NSLog(@"FlatVibe: accelerometer was active already..");
+        }
+        [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    }
+    else {
+        NSLog(@"FlatVibe: no accelerometer available -- doing.. nothing");
+        // TODO: cleanup
+    }
 }
 
-// Hooking an instance method with no arguments.
-- (id)noArguments {
-	%log;
-	id awesome = %orig;
-	[awesome doSomethingElse];
+- (void) tick:(NSTimer *)timer {
 
-	return awesome;
+    if (!self.mm.accelerometerActive) { // TODO: ??
+        NSLog(@"FlatVibe: accelerometer not active");
+        return;
+    }
+    if (!self.mm.accelerometerData) { // TODO: ??
+        NSLog(@"FlatVibe: no accelerometer data");
+        return;
+    }
+
+    CMAcceleration a = self.mm.accelerometerData.acceleration;
+    //NSLog(@"FlatVibe: acceleration: %f %f %f", a.x, a.y, a.z);
+    float epsilon = 0.1;
+    BOOL flat = fabs(a.x) < epsilon && fabs(a.y) < epsilon && fabs(a.z) - 1 < epsilon;
+
+    if (flat && !self.flat) {
+        NSLog(@"FlatVibe: self.flat = NO  -> YES");
+        self.flat = YES;
+        [self setVibration];
+    }
+    else if (!flat && self.flat) {
+        NSLog(@"FlatVibe: self.flat = YES -> NO");
+        self.flat = NO;
+        [self setVibration];
+    }
 }
 
-// Always make sure you clean up after yourself; Not doing so could have grave consequences!
-%end
-*/
+- (void) setVibration {
+
+    NSString *switchIdentifier = @"com.a3tweaks.switch.vibration";
+    FSSwitchPanel *fsp = [FSSwitchPanel sharedPanel];
+    [fsp setState:(self.flat? FSSwitchStateOff: FSSwitchStateOn) forSwitchIdentifier:switchIdentifier];
+    [fsp applyActionForSwitchIdentifier:switchIdentifier];
+}
+
+@end
+
+static FlatVibe *flatvibe;
+
+%ctor {
+    flatvibe = [[[FlatVibe alloc] init] autorelease];
+    [flatvibe run];
+}
