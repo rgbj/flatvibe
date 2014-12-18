@@ -11,3 +11,5 @@ include $(THEOS_MAKE_PATH)/tweak.mk
 
 after-install::
 	install.exec "killall SpringBoard"
+SUBPROJECTS += flatvibeprefs
+include $(THEOS_MAKE_PATH)/aggregate.mk

@@ -1,0 +1,10 @@
+{
+    entry = {
+	bundle = FlatVibePrefs;
+	cell = PSLinkCell;
+	detail = FlatVibePrefsListController;
+	icon = FlatVibePrefs.png;
+	isController = 1;
+	label = "Flat Vibe";
+    };
+}

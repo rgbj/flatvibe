@@ -16,27 +16,66 @@
 @implementation FlatVibe
 
 - (id) init {
-    // TODO: check language idiom about alloc/init & errs
     if (self = [super init]) {
-
-        self.vibrate = FSSwitchStateIndeterminate;
-        self.fsp = [FSSwitchPanel sharedPanel];
-        self.mm = [[[CMMotionManager alloc] init] autorelease];
-
-        if(self.mm.accelerometerAvailable) {
-            if (!self.mm.accelerometerActive) {
-                [self.mm startAccelerometerUpdates];
-            }
-            else {
-                NSLog(@"FlatVibe: accelerometer was active already..");
-            }
-            self.timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
-        }
-        else {
-            NSLog(@"FlatVibe: no accelerometer available -- doing.. nothing");
-        }
+        _vibrate = FSSwitchStateIndeterminate;
+        _fsp = [FSSwitchPanel sharedPanel];
+        _mm = [[CMMotionManager alloc] init];
     }
     return self;
+}
+
+- (void) dealloc {
+    NSLog(@"FlatVibe:dealloc");
+    [self.mm release];
+    [super dealloc];
+}
+
+- (void) loadPreferences {
+
+    NSLog(@"FlatVibe: loadPreferences");
+
+    NSMutableDictionary *prefs = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.lazypulse.flatvibeprefs.plist"];
+
+    if (!prefs) {
+        NSLog(@"FlatVibe: no prefs??");
+        return;
+    }
+
+    id o = [prefs objectForKey:@"enabled"];
+    if (nil == o) {
+        NSLog(@"FlatVibe: nil == o");
+    }
+    BOOL enable = [o boolValue];
+    NSLog(@"FlatVibe: enable = %d", enable);
+
+    if (enable) {
+        if (!self.timer) {
+            NSLog(@"FlatVibe: enabling");
+            if(self.mm.accelerometerAvailable) {
+                if (!self.mm.accelerometerActive) {
+                    [self.mm startAccelerometerUpdates];
+                }
+                else {
+                    NSLog(@"FlatVibe: accelerometer was active already..");
+                }
+                self.timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+            }
+            else {
+                NSLog(@"FlatVibe: no accelerometer available -- doing.. nothing");
+            }
+        }
+    }
+    else {
+        if (self.timer) {
+            NSLog(@"FlatVibe: disabling");
+            [self.timer invalidate];
+            [self.timer release];
+            self.timer = nil;
+            [self.mm stopAccelerometerUpdates];
+        }
+    }
+
+    [prefs release];
 }
 
 - (void) tick:(NSTimer *)timer {
@@ -74,6 +113,21 @@ static NSString *switchIdentifier = @"com.a3tweaks.switch.vibration";
 
 @end
 
+static FlatVibe *flatvibe;
+
+static void loadPrefs() {
+    [flatvibe loadPreferences];
+}
+
+
 %ctor {
-    [[[FlatVibe alloc] init] autorelease];
+    flatvibe = [[[FlatVibe alloc] init] autorelease];
+
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
+                                    NULL,
+                                    (CFNotificationCallback)loadPrefs,
+                                    CFSTR("com.lazypulse.flatvibeprefs/changed"),
+                                    NULL,
+                                    CFNotificationSuspensionBehaviorCoalesce);
+    [flatvibe loadPreferences];
 }
